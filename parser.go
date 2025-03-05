@@ -69,6 +69,63 @@ var operationsMapped = map[string]OperationMeta{
 	},
 }
 
+// Parse takes a human-readable query string and converts it into a structured SQL statement
+// with placeholders and corresponding argument values. It allows logical operators (`AND`, `OR`),
+// comparison operators (`=`, `!=`, `>`, `<`, `>=`, `<=`), and multi-value expressions (`IN`, `BETWEEN`).
+//
+// The function ensures that only valid column names are used, supports nested expressions with
+// parentheses, and generates a properly formatted SQL string.
+//
+// Errors include detailed context such as line and column numbers.
+//
+// Parameters:
+//   - filter (string): The query string to parse. Example: `name eq "John" and age gte 25 or (city eq "New York")`.
+//   - validateCol (func(string) bool): A function that validates column names. It should return `true`
+//     if the column is valid, otherwise `false`.
+//
+// Returns:
+//   - ParsedQuery: A struct containing:
+//   - SQL (string): The formatted SQL query with placeholders (`?`).
+//   - Args ([]interface{}): A slice containing the argument values for the SQL query.
+//   - error: An error if parsing fails, including detailed error messages with line and column numbers.
+//
+// Example Usage:
+//
+//	validateCol := func(col string) bool {
+//		validColumns := map[string]bool{"name": true, "age": true, "city": true, "status": true}
+//		return validColumns[col]
+//	}
+//
+//	query, err := Parse(`name eq "John" and age gte 25 or (city eq "New York" and status in ["active", "pending"])`, validateCol)
+//	if err != nil {
+//		fmt.Println("Error:", err)
+//		return
+//	}
+//
+//	fmt.Println("SQL:", query.SQL)
+//	fmt.Println("Args:", query.Args)
+//
+// Example Output:
+//
+//	SQL:
+//	name = ?
+//	AND age >= ?
+//	OR ( city = ? AND status IN ( ?, ? ) )
+//
+//	Args:
+//	["John", 25, "New York", "active", "pending"]
+//
+// Possible Errors:
+//   - InvalidColumnError: When a column name is not allowed.
+//   - UnexpectedTokenError: When the query contains an unexpected token.
+//   - MissingValueError: When an operation is missing a required value.
+//   - InvalidOperationError: When an operation is not valid for a given context.
+//   - UnmatchedParenthesisError: When there are unmatched opening or closing parentheses.
+//
+// Notes:
+//   - Multi-value expressions (`IN`, `BETWEEN`) must have the correct number of values.
+//   - Strings should be enclosed in double (`"`) or single (`'`) quotes.
+//   - Arrays should be enclosed in square brackets (`[ ]`).
 func Parse(filter string, validateCol func(col string) bool) (ParsedQuery, error) {
 	var sb strings.Builder
 	vals := make([]interface{}, 0)
