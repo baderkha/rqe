@@ -10,10 +10,10 @@
 
 ## 🚀 Features
 ✅ **SQL Query Generation** – Converts human-friendly filters into SQL  
-✅ **Supports Logical Operators** – `AND`, `OR`, `IN`, `BETWEEN`  
+✅ **SQL Supported Operations** – `EQ`, `LT`, `GT`, `GTE`, `IN`, `BETWEEN`, `LTE`, `NE`... etc
+✅ **Supports Logical Operators** – `AND`, `OR`and logic nesting. Complicated AND | Ors
 ✅ **Custom Column Validation** – Prevents invalid column names and sql injection
 ✅ **Multi-Value Expressions** – Supports arrays inside `IN` clauses  
-✅ **Auto-Formatted SQL** – Generates clean and readable SQL queries  
 ✅ **Error Handling with Context** – Returns structured errors with line numbers
 
 ---
