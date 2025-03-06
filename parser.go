@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/bzick/tokenizer"
+	"github.com/davecgh/go-spew/spew"
 )
 
 const (
@@ -13,8 +14,10 @@ const (
 	TMath
 	TDoubleQuoted
 	TLogicalOperation
-	TParen
+	TParenOpen
+	TParenClose
 	TArray
+	TMacro
 )
 
 type OperationMeta struct {
@@ -134,9 +137,12 @@ func Parse(filter string, validateCol func(col string) bool) (ParsedQuery, error
 	parser := tokenizer.New()
 	parser.DefineTokens(TEquality, []string{"lt", "lte", "eq", "gte", "gt", "ne", "in", "between"})
 	parser.DefineTokens(TLogicalOperation, []string{"and", "or"})
+	parser.DefineTokens(TParenOpen, []string{"("})
+	parser.DefineTokens(TParenClose, []string{")"})
 	parser.DefineStringToken(TDoubleQuoted, `"`, `"`).SetEscapeSymbol(tokenizer.BackSlash)
 	parser.DefineStringToken(TDoubleQuoted, `'`, `'`).SetEscapeSymbol(tokenizer.BackSlash)
 	parser.DefineStringToken(TArray, `[`, `]`).SetEscapeSymbol(tokenizer.BackSlash)
+	parser.DefineTokens(TMacro, SupportedMacros)
 
 	parser.AllowKeywordSymbols(tokenizer.Underscore, tokenizer.Numbers)
 
@@ -164,7 +170,9 @@ func Parse(filter string, validateCol func(col string) bool) (ParsedQuery, error
 		switch {
 		case stream.CurrentToken().Is(tokenizer.TokenKeyword):
 			col := tokenValue
+			macroType := ""
 			quotesNeeded := 1
+			currentVals := []any{}
 
 			if !validateCol(col) {
 				return ParsedQuery{}, InvalidColumnError{Column: col, Line: line, Pos: column}
@@ -180,15 +188,29 @@ func Parse(filter string, validateCol func(col string) bool) (ParsedQuery, error
 				return ParsedQuery{}, InvalidOperationError{Operation: opValue, Column: col, Line: line, Pos: column + len(col)}
 			}
 
-			if !stream.GoNextIfNextIs(tokenizer.TokenFloat, tokenizer.TokenInteger, tokenizer.TokenString) {
+			if !stream.GoNextIfNextIs(tokenizer.TokenFloat, tokenizer.TokenInteger, tokenizer.TokenString, TMacro) {
 				return ParsedQuery{}, MissingValueError{Column: col, Line: line, Pos: column + len(col) + len(opValue)}
 			}
 
+			// parse macro + precheck
+			if stream.CurrentToken().Is(TMacro) {
+				macroType = stream.CurrentToken().ValueString()
+				spew.Dump(stream.NextToken().ValueString())
+				if !stream.GoNextIfNextIs(TParenOpen) {
+					return ParsedQuery{}, UnexpectedTokenError{Token: "Macro expressions must have opening parenthesis and closing ones", Line: line, Pos: column}
+				}
+				stream.GoNext()
+				if !stream.NextToken().Is(TParenClose) {
+					return ParsedQuery{}, UnexpectedTokenError{Token: "Macro expressions must have opening parenthesis and closing ones", Line: line, Pos: column}
+				}
+			}
+
+			// value parsing logic remains the same
 			switch {
 			case stream.CurrentToken().IsFloat():
-				vals = append(vals, stream.CurrentToken().ValueFloat64())
+				currentVals = append(currentVals, stream.CurrentToken().ValueFloat64())
 			case stream.CurrentToken().IsInteger():
-				vals = append(vals, stream.CurrentToken().ValueInt64())
+				currentVals = append(currentVals, stream.CurrentToken().ValueInt64())
 			case stream.CurrentToken().IsString():
 				if stream.CurrentToken().StringKey() == TArray {
 					if !op.IsMultiValue {
@@ -204,17 +226,40 @@ func Parse(filter string, validateCol func(col string) bool) (ParsedQuery, error
 					if len(value) == 0 {
 						return ParsedQuery{}, InvalidOperationError{Operation: "multi-value array empty arguments", Column: col, Line: line, Pos: column}
 					}
-					vals = append(vals, value...)
+					currentVals = append(currentVals, value...)
 				} else {
 					strVal := stream.CurrentToken().ValueString()
-					vals = append(vals, strVal[1:len(strVal)-1]) // Strip quotes
+					currentVals = append(currentVals, strVal[1:len(strVal)-1]) // Strip quotes
 				}
 			}
 
-			writeWithSpaces(fmt.Sprintf("%s %s", col, op.Value(quotesNeeded)))
+			// run macro transformation after we have a value
+			if macroType != "" {
+				h, ok := MacroHandlers[macroType]
+				if !ok {
+					return ParsedQuery{}, MacroNotImplemented{Column: col, MacroName: macroType}
+				}
+				transformedArgs, err := h.RunMacro(col, currentVals...)
+				if err != nil {
+					return ParsedQuery{}, err
+				}
+				currentVals = transformedArgs
+				stream.GoNext().GoNext() // we did a check before so we good
+			}
 
+			writeWithSpaces(fmt.Sprintf("%s %s", col, op.Value(quotesNeeded)))
+			vals = append(vals, currentVals...)
 		case stream.CurrentToken().Is(TLogicalOperation):
+			if stream.PrevToken().Is(TLogicalOperation) || stream.NextToken().Is(TLogicalOperation) {
+				return ParsedQuery{}, &LogicalTokenError{Reason: "before or after a logical operation, you must have an expression or nested expression"}
+			} else if stream.CurrentToken().Offset() == 0 {
+				return ParsedQuery{}, &LogicalTokenError{Reason: "cannot start with a logical operation"}
+			}
+			if !stream.GoNext().IsValid() {
+				return ParsedQuery{}, &LogicalTokenError{Reason: "cannot end with a logical operation"}
+			}
 			writeWithSpaces(tokenValue)
+			continue
 
 		case tokenValue == "(":
 			if !stream.NextToken().Is(tokenizer.TokenKeyword) {

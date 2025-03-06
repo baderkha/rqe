@@ -36,7 +36,18 @@ func (e UnexpectedTokenError) Error() string {
 	return fmt.Sprintf("unexpected token '%s' at line %d, offset %d", e.Token, e.Line, e.Pos)
 }
 
-func (e UnexpectedTokenError) Position() (int, int) {
+// UnexpectedTokenError represents an error when an unexpected token appears
+type LogicalTokenError struct {
+	Reason string
+	Line   int
+	Pos    int
+}
+
+func (e LogicalTokenError) Error() string {
+	return fmt.Sprintf("unexpected logical operation due to ['%s'] at line %d, offset %d", e.Reason, e.Line, e.Pos)
+}
+
+func (e LogicalTokenError) Position() (int, int) {
 	return e.Line, e.Pos
 }
 
@@ -53,6 +64,26 @@ func (e MissingValueError) Error() string {
 
 func (e MissingValueError) Position() (int, int) {
 	return e.Line, e.Pos
+}
+
+// InvalidMacroValueError represents an error when a value is invalid for a macro function
+type InvalidMacroValueError struct {
+	Column string
+	Detail string
+}
+
+func (e InvalidMacroValueError) Error() string {
+	return fmt.Sprintf("expected a valid macro value for column '%s' : [%s]", e.Column, e.Detail)
+}
+
+// InvalidMacroValueError represents an error when a value is invalid for a macro function
+type MacroNotImplemented struct {
+	Column    string
+	MacroName string
+}
+
+func (e MacroNotImplemented) Error() string {
+	return fmt.Sprintf("This macro [%s] was not implemented column '%s'", e.MacroName, e.Column)
 }
 
 // InvalidOperationError represents an error when an invalid operation is used
