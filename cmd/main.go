@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	out, err := rqe.Parse(`user_id in age(21)  and user_id in [1,2] and (date_of_birth between age([17,18]) or sat_score gte 1200 and (val eq 4)) or (val eq 1)`, func(col string) bool {
+	out, err := rqe.Parse("1 AND IF(ASCII(SUBSTRING((SELECT USER()),1,1))>=100,1, BENCHMARK(2000000,MD5(NOW()))) --", func(col string) bool {
 		return true
 	})
 	if err != nil {
