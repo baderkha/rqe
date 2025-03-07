@@ -1,28 +1,10 @@
-package rqe
+package macros
 
 import (
 	"fmt"
 	"reflect"
 	"time"
 )
-
-var (
-	SupportedMacros = []string{
-		"age",
-	}
-)
-
-var (
-	MacroHandlers map[string]Macro = map[string]Macro{
-		"age": &AgeMacro{
-			Format: time.DateTime,
-		},
-	}
-)
-
-type Macro interface {
-	RunMacro(col string, args ...any) (arg []any, err error)
-}
 
 var _ Macro = &AgeMacro{}
 

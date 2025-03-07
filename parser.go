@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/baderkha/rqe/macros"
 	"github.com/bzick/tokenizer"
 	"github.com/davecgh/go-spew/spew"
 )
@@ -142,7 +143,7 @@ func Parse(filter string, validateCol func(col string) bool) (ParsedQuery, error
 	parser.DefineStringToken(TDoubleQuoted, `"`, `"`).SetEscapeSymbol(tokenizer.BackSlash)
 	parser.DefineStringToken(TDoubleQuoted, `'`, `'`).SetEscapeSymbol(tokenizer.BackSlash)
 	parser.DefineStringToken(TArray, `[`, `]`).SetEscapeSymbol(tokenizer.BackSlash)
-	parser.DefineTokens(TMacro, SupportedMacros)
+	parser.DefineTokens(TMacro, macros.Supported)
 
 	parser.AllowKeywordSymbols(tokenizer.Underscore, tokenizer.Numbers)
 
@@ -235,9 +236,9 @@ func Parse(filter string, validateCol func(col string) bool) (ParsedQuery, error
 
 			// run macro transformation after we have a value
 			if macroType != "" {
-				h, ok := MacroHandlers[macroType]
+				h, ok := macros.Handlers[macroType]
 				if !ok {
-					return ParsedQuery{}, MacroNotImplemented{Column: col, MacroName: macroType}
+					return ParsedQuery{}, macros.MacroNotImplemented{Column: col, MacroName: macroType}
 				}
 				transformedArgs, err := h.RunMacro(col, currentVals...)
 				if err != nil {
